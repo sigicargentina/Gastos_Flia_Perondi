@@ -1251,7 +1251,7 @@ function renderChartCategorias(datos){
   destroyChart('categorias');
 
   const esMobile = window.innerWidth < 480;
-  const alturaPorFila = esMobile ? 40 : 32;
+  const alturaPorFila = esMobile ? 42 : 36;
   document.getElementById('categorias-wrap').style.height = Math.max(240, labels.length * alturaPorFila) + 'px';
 
   const ctx = document.getElementById('chart-categorias').getContext('2d');
@@ -1281,12 +1281,12 @@ function renderChartCategorias(datos){
         y:{
           grid:{ display:false },
           ticks:{
-            font:{ family:"'Work Sans'", size: esMobile?11:12.5 },
+            autoSkip:false,
+            font:{ family:"'Work Sans'", size: esMobile?17:18 },
             callback: function(value){
               const label = this.getLabelForValue(value);
               const espacio = label.indexOf(' ');
-              if(espacio === -1) return label;
-              return [label.slice(0, espacio), label.slice(espacio+1)];
+              return espacio === -1 ? label : label.slice(0, espacio);
             }
           }
         }
