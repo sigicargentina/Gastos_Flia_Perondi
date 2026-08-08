@@ -299,6 +299,46 @@
   }
   .otro-field.show{display:block;}
 
+  .toggle-extra{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:11px 14px;
+    border:1.5px solid var(--border);
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:600;
+    font-size:14px;
+    color:var(--ink-soft);
+    background:var(--surface-soft);
+    user-select:none;
+    transition:all .15s ease;
+  }
+  .toggle-extra:hover{border-color:var(--ink-faint);}
+  .toggle-extra.active{
+    border-color:var(--mustard);
+    background:rgba(201,143,43,0.12);
+    color:var(--ink);
+  }
+  .toggle-extra .check{
+    width:20px; height:20px;
+    border-radius:6px;
+    border:1.5px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px;
+    color:transparent;
+    flex-shrink:0;
+    background:var(--surface);
+    transition:all .15s ease;
+  }
+  .toggle-extra.active .check{
+    background:var(--mustard);
+    border-color:var(--mustard);
+    color:#fff;
+  }
+
+  .tag.extra{background:var(--mustard); color:#3a2a08;}
+
   .submit-row{
     margin-top:20px;
     display:flex;
@@ -396,9 +436,11 @@
   .filter-row{
     display:flex;
     gap:8px;
+    flex-wrap:wrap;
   }
   .filter-row select{
     width:auto;
+    flex:1 1 140px;
     font-size:13px;
     padding:7px 28px 7px 10px;
     background-position:right 9px center;
@@ -609,6 +651,13 @@
         </div>
       </div>
 
+      <div class="field">
+        <div class="toggle-extra" id="extra-toggle">
+          <span class="check">✓</span>
+          <span>Gasto extraordinario</span>
+        </div>
+      </div>
+
       <div class="submit-row">
         <button class="primary" id="submit-btn">Cargar gasto</button>
         <button class="ghost" id="cancel-edit-btn" style="display:none;">Cancelar</button>
@@ -629,13 +678,22 @@
 
     <div class="list-header">
       <h2>Movimientos</h2>
-      <div class="filter-row">
-        <select id="filtro-quien">
-          <option value="">Todos</option>
-          <option value="Cocó">Cocó</option>
-          <option value="María">María</option>
-        </select>
-      </div>
+    </div>
+    <div class="filter-row">
+      <select id="filtro-quien">
+        <option value="">Todos</option>
+        <option value="Cocó">Cocó</option>
+        <option value="María">María</option>
+      </select>
+      <select id="filtro-categoria">
+        <option value="">Todas las categorías</option>
+      </select>
+      <select id="filtro-detalle">
+        <option value="">Todos los detalles</option>
+      </select>
+    </div>
+    <div class="field" style="margin-top:8px;">
+      <input type="text" id="filtro-texto" placeholder="🔍 Buscar un gasto...">
     </div>
 
     <div id="lista-gastos">
@@ -766,6 +824,7 @@ let gastos = [];
 let editandoId = null;
 let quienSel = null;
 let pagoSel = null;
+let esExtraordinario = false;
 let statsPeriodo = 'mes';
 let charts = {};
 
@@ -863,7 +922,13 @@ function setConnStatus(ok){
 const submitBtn = document.getElementById('submit-btn');
 const cancelEditBtn = document.getElementById('cancel-edit-btn');
 const mesInput = document.getElementById('mes-gasto');
+const extraToggle = document.getElementById('extra-toggle');
 mesInput.value = toMonthValue(new Date());
+
+extraToggle.addEventListener('click', ()=>{
+  esExtraordinario = !esExtraordinario;
+  extraToggle.classList.toggle('active', esExtraordinario);
+});
 
 function toMonthValue(d){
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
@@ -894,7 +959,8 @@ submitBtn.addEventListener('click', async ()=>{
     fecha: mesInput.value + '-01T12:00:00',
     quien: quienSel,
     categoria, subcategoria, monto,
-    formaPago: pagoSel
+    formaPago: pagoSel,
+    extraordinario: esExtraordinario
   };
 
   try{
@@ -924,6 +990,8 @@ function resetForm(){
   catSelect.selectedIndex = 0; poblarSub();
   document.querySelectorAll('#quien-selector .seg-btn, #pago-selector .seg-btn').forEach(b=>b.classList.remove('active'));
   quienSel = null; pagoSel = null;
+  esExtraordinario = false;
+  extraToggle.classList.remove('active');
   submitBtn.textContent = 'Cargar gasto';
   cancelEditBtn.style.display = 'none';
 }
@@ -931,7 +999,7 @@ function resetForm(){
 /* ============ NORMALIZACIÓN DE ENCABEZADOS ============ */
 /* Hace que la app funcione aunque la hoja tenga los encabezados con
    distintos acentos, mayúsculas o espacios (ej: "Quien" en vez de "Quién"). */
-const CAMPOS_CANONICOS = ['ID','Fecha','Quién','Categoría','Subcategoría','Monto','Forma de Pago','Fecha Carga'];
+const CAMPOS_CANONICOS = ['ID','Fecha','Quién','Categoría','Subcategoría','Monto','Forma de Pago','Fecha Carga','Extraordinario'];
 function norm(s){
   return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 }
@@ -962,6 +1030,7 @@ async function cargarGastos(){
     }
     poblarCategoriaSelect();
     poblarSub();
+    poblarFiltrosMovimientos();
     renderListaCategorias();
     setConnStatus(true);
   }catch(err){
@@ -974,11 +1043,19 @@ async function cargarGastos(){
   if(document.getElementById('page-stats').classList.contains('active')) renderEstadisticas();
 }
 
+function extraerIcono(catFull){
+  const s = (catFull||'').trim();
+  const m = s.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)/u);
+  return m ? m[1] : '';
+}
 function catIcon(catFull){
-  return (catFull||'').split(' ')[0];
+  const icono = extraerIcono(catFull);
+  return icono || (catFull||'').slice(0,2);
 }
 function catNombre(catFull){
-  return (catFull||'').split(' ').slice(1).join(' ');
+  const s = (catFull||'').trim();
+  const icono = extraerIcono(s);
+  return icono ? s.slice(icono.length).trim() : s;
 }
 
 function renderTotales(){
@@ -998,9 +1075,20 @@ function renderTotales(){
 function renderLista(){
   const cont = document.getElementById('lista-gastos');
   const filtro = document.getElementById('filtro-quien').value;
+  const filtroCat = document.getElementById('filtro-categoria').value;
+  const filtroDet = document.getElementById('filtro-detalle').value;
+  const filtroTexto = document.getElementById('filtro-texto').value.trim().toLowerCase();
   // Orden real de carga: lo cargado más recientemente va arriba.
   let datos = [...gastos];
   if(filtro) datos = datos.filter(g=>g['Quién']===filtro);
+  if(filtroCat) datos = datos.filter(g=>g.Categoría===filtroCat);
+  if(filtroDet) datos = datos.filter(g=>g.Subcategoría===filtroDet);
+  if(filtroTexto){
+    datos = datos.filter(g=>{
+      const texto = `${g.Categoría||''} ${g.Subcategoría||''} ${g.Monto||''}`.toLowerCase();
+      return texto.includes(filtroTexto);
+    });
+  }
   datos.sort((a,b)=> b._orden - a._orden);
 
   if(datos.length===0){
@@ -1018,11 +1106,12 @@ function renderLista(){
       lastMes = mesKey;
     }
     const whoClass = g['Quién']==='Cocó' ? 'who-coco' : 'who-maria';
+    const esExtra = g.Extraordinario === true || g.Extraordinario === 'TRUE' || g.Extraordinario === 'true';
     html += `
       <div class="entry">
         <div class="icon">${catIcon(g.Categoría)}</div>
         <div class="info">
-          <div class="cat">${catNombre(g.Categoría)}</div>
+          <div class="cat">${catNombre(g.Categoría)}${esExtra ? ' <span class="tag extra">✓ Extraordinario</span>' : ''}</div>
           <div class="sub">${g.Subcategoría||''}</div>
           <div class="meta">
             <span class="tag ${whoClass}">${g['Quién']}</span>
@@ -1073,6 +1162,9 @@ function editarGasto(id){
   });
   pagoSel = g['Forma de Pago'];
 
+  esExtraordinario = g.Extraordinario === true || g.Extraordinario === 'TRUE' || g.Extraordinario === 'true';
+  extraToggle.classList.toggle('active', esExtraordinario);
+
   submitBtn.textContent = 'Guardar cambios';
   cancelEditBtn.style.display = 'inline-block';
   document.querySelector('[data-tab="libro"]').click();
@@ -1097,6 +1189,30 @@ async function borrarGasto(id){
 }
 
 document.getElementById('filtro-quien').addEventListener('change', renderLista);
+document.getElementById('filtro-categoria').addEventListener('change', renderLista);
+document.getElementById('filtro-detalle').addEventListener('change', renderLista);
+document.getElementById('filtro-texto').addEventListener('input', renderLista);
+
+function poblarFiltrosMovimientos(){
+  const selCat = document.getElementById('filtro-categoria');
+  const selDet = document.getElementById('filtro-detalle');
+  const prevCat = selCat.value;
+  const prevDet = selDet.value;
+
+  const categorias = [...new Set(gastos.map(g=>g.Categoría).filter(Boolean))].sort();
+  const detalles = [...new Set(gastos.map(g=>g.Subcategoría).filter(Boolean))].sort();
+
+  selCat.innerHTML = '<option value="">Todas las categorías</option>' +
+    categorias.map(c=>`<option value="${escapeAttr(c)}">${c}</option>`).join('');
+  selDet.innerHTML = '<option value="">Todos los detalles</option>' +
+    detalles.map(d=>`<option value="${escapeAttr(d)}">${d}</option>`).join('');
+
+  if(categorias.includes(prevCat)) selCat.value = prevCat;
+  if(detalles.includes(prevDet)) selDet.value = prevDet;
+}
+function escapeAttr(s){
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
 
 /* ============ CONFIGURACIÓN: CATEGORÍAS ============ */
 let editandoCategoriaOriginal = null;
@@ -1284,9 +1400,7 @@ function renderChartCategorias(datos){
             autoSkip:false,
             font:{ family:"'Work Sans'", size: esMobile?17:18 },
             callback: function(value){
-              const label = this.getLabelForValue(value);
-              const espacio = label.indexOf(' ');
-              return espacio === -1 ? label : label.slice(0, espacio);
+              return catIcon(this.getLabelForValue(value));
             }
           }
         }
