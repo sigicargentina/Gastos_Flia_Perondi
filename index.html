@@ -384,6 +384,17 @@
     color:var(--ink-soft);
     margin-left:8px;
   }
+  .extra-desglose{
+    display:flex;
+    gap:16px;
+    margin:-6px 0 14px;
+  }
+  .extra-desglose span{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .extra-desglose b{color:var(--ink); font-weight:600;}
 
   .submit-row{
     margin-top:20px;
@@ -432,13 +443,10 @@
 
   /* ---- Total ticker ---- */
   .ticker{
-    display:flex;
-    justify-content:space-between;
-    align-items:baseline;
     background:var(--ink);
     color:var(--surface);
     border-radius:12px;
-    padding:16px 20px;
+    padding:16px 20px 18px;
     margin-top:16px;
   }
   .ticker .label{
@@ -452,18 +460,47 @@
     font-family:var(--font-mono);
     font-size:22px;
     font-weight:600;
+    margin:2px 0 14px;
   }
-  .ticker .breakdown{
+  .ticker-personas{
     display:flex;
-    gap:16px;
-    margin-top:6px;
+    gap:14px;
   }
-  .ticker .breakdown span{
+  .ticker-persona{
+    flex:1;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.1);
+    border-radius:10px;
+    padding:10px 12px;
+  }
+  .ticker-nombre{
+    font-family:var(--font-body);
+    font-weight:700;
+    font-size:13px;
+    margin:0 0 6px;
+    color:#fff;
+  }
+  .ticker-fila{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
     font-family:var(--font-mono);
-    font-size:12px;
-    color:#C7D0C3;
+    font-size:11px;
+    color:#B9C4B4;
+    padding:2px 0;
   }
-  .ticker .breakdown b{color:#fff;}
+  .ticker-fila b{
+    color:#fff;
+    font-size:12px;
+    font-weight:600;
+  }
+  .ticker-fila.total{
+    border-top:1px solid rgba(255,255,255,0.16);
+    margin-top:4px;
+    padding-top:5px;
+  }
+  .ticker-fila.total span{color:#fff; font-weight:600;}
+  .ticker-fila.total b{font-size:13.5px;}
 
   /* ---- List ---- */
   .list-header{
@@ -732,12 +769,20 @@
     </div>
 
     <div class="ticker">
-      <div>
-        <p class="label">Total este mes</p>
-        <p class="value" id="total-mes">$ 0</p>
-        <div class="breakdown">
-          <span>Cocó: <b id="total-coco">$0</b></span>
-          <span>María: <b id="total-maria">$0</b></span>
+      <p class="label">Total este mes</p>
+      <p class="value" id="total-mes">$ 0</p>
+      <div class="ticker-personas">
+        <div class="ticker-persona">
+          <p class="ticker-nombre">Cocó</p>
+          <div class="ticker-fila"><span>Normales</span><b id="coco-normales">$0</b></div>
+          <div class="ticker-fila"><span>Extraordinarios</span><b id="coco-extra">$0</b></div>
+          <div class="ticker-fila total"><span>Total</span><b id="coco-total-final">$0</b></div>
+        </div>
+        <div class="ticker-persona">
+          <p class="ticker-nombre">María</p>
+          <div class="ticker-fila"><span>Normales</span><b id="maria-normales">$0</b></div>
+          <div class="ticker-fila"><span>Extraordinarios</span><b id="maria-extra">$0</b></div>
+          <div class="ticker-fila total"><span>Total</span><b id="maria-total-final">$0</b></div>
         </div>
       </div>
     </div>
@@ -805,6 +850,7 @@
     <div class="card">
       <p class="card-title">⚡ Gastos extraordinarios</p>
       <div class="extra-total" id="extra-total">$ 0</div>
+      <div class="extra-desglose" id="extra-desglose"></div>
       <div id="extra-lista"></div>
     </div>
 
@@ -1138,11 +1184,17 @@ function renderTotales(){
     return f.getMonth()===ahora.getMonth() && f.getFullYear()===ahora.getFullYear();
   });
   const total = delMes.reduce((a,g)=>a+Number(g.Monto||0),0);
-  const totalCoco = delMes.filter(g=>g['Quién']==='Cocó').reduce((a,g)=>a+Number(g.Monto||0),0);
-  const totalMaria = delMes.filter(g=>g['Quién']==='María').reduce((a,g)=>a+Number(g.Monto||0),0);
   document.getElementById('total-mes').textContent = '$ ' + total.toLocaleString('es-AR',{maximumFractionDigits:0});
-  document.getElementById('total-coco').textContent = '$' + totalCoco.toLocaleString('es-AR',{maximumFractionDigits:0});
-  document.getElementById('total-maria').textContent = '$' + totalMaria.toLocaleString('es-AR',{maximumFractionDigits:0});
+
+  ['Cocó','María'].forEach(persona=>{
+    const prefijo = persona === 'Cocó' ? 'coco' : 'maria';
+    const deLaPersona = delMes.filter(g=>g['Quién']===persona);
+    const normales = deLaPersona.filter(g=>!esGastoExtraordinario(g)).reduce((a,g)=>a+Number(g.Monto||0),0);
+    const extra = deLaPersona.filter(esGastoExtraordinario).reduce((a,g)=>a+Number(g.Monto||0),0);
+    document.getElementById(`${prefijo}-normales`).textContent = FMT_MONEY(normales);
+    document.getElementById(`${prefijo}-extra`).textContent = FMT_MONEY(extra);
+    document.getElementById(`${prefijo}-total-final`).textContent = FMT_MONEY(normales + extra);
+  });
 }
 
 function renderLista(){
@@ -1441,9 +1493,13 @@ function esGastoExtraordinario(g){
 function renderExtraordinarios(datos){
   const extras = datos.filter(esGastoExtraordinario).sort((a,b)=>Number(b.Monto)-Number(a.Monto));
   const total = extras.reduce((a,g)=>a+Number(g.Monto||0),0);
+  const totalCoco = extras.filter(g=>g['Quién']==='Cocó').reduce((a,g)=>a+Number(g.Monto||0),0);
+  const totalMaria = extras.filter(g=>g['Quién']==='María').reduce((a,g)=>a+Number(g.Monto||0),0);
 
   document.getElementById('extra-total').innerHTML =
     FMT_MONEY(total) + `<span class="count">${extras.length} gasto${extras.length===1?'':'s'}</span>`;
+  document.getElementById('extra-desglose').innerHTML =
+    `<span>Cocó: <b>${FMT_MONEY(totalCoco)}</b></span><span>María: <b>${FMT_MONEY(totalMaria)}</b></span>`;
 
   const cont = document.getElementById('extra-lista');
   if(extras.length === 0){
